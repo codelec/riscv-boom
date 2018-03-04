@@ -325,29 +325,29 @@ class BoomCore(implicit p: Parameters, edge: freechips.rocketchip.tilelink.TLEdg
    //-------------------------------------------------------------
 
    // These stages are effectively in parallel with instruction fetch and
-   // decode.  BHT look-up is in parallel with I$ access, and Branch Decode
-   // occurs before fetch buffer insertion.
+   // decode.
 
-//   bpd_stage.io.icmiss := io.imem.ext_btb.icmiss
    bpd_stage.io.btb_req := io.imem.btb_req.req
-//   bpd_stage.io.s2_replay := io.imem.resp.bits.replay
+   bpd_stage.io.f2_replay := io.imem.btb_req.s2_replay
    bpd_stage.io.fqenq_valid := io.imem.btb_req.fqenq_valid
    bpd_stage.io.f2_stall := !io.imem.resp.ready
+   bpd_stage.io.f3_stall := fetch_unit.io.f3_stall
    bpd_stage.io.debug_fqenq_pc := io.imem.btb_req.debug_fqenq_pc
    bpd_stage.io.debug_fqenq_ready := io.imem.btb_req.debug_fqenq_ready
-//   bpd_stage.io.ext_btb_req.valid := io.imem.btb_req.valid || io.imem.req.valid
-
 
    bpd_stage.io.br_unit := br_unit
+   bpd_stage.io.ftq_restore := fetch_unit.io.ftq_restore_history
    bpd_stage.io.redirect := io.imem.req.valid
    bpd_stage.io.flush := rob.io.flush.valid
-
-//   bpd_stage.io.fetch_stalled := fetch_unit.io.stalled TODO how are we going to handle back-pressure to bpd?
+   bpd_stage.io.f3_enq_valid := io.imem.resp.valid
+   bpd_stage.io.f2_redirect := fetch_unit.io.f2_redirect
+   bpd_stage.io.f4_redirect := fetch_unit.io.f4_redirect
+   bpd_stage.io.fe_clear := fetch_unit.io.clear_fetchbuffer
 
    bpd_stage.io.f3_ras_update := fetch_unit.io.f3_ras_update
    bpd_stage.io.f3_btb_update := fetch_unit.io.f3_btb_update
    bpd_stage.io.bim_update    := fetch_unit.io.bim_update
-//   bpd_stage.io.f3_hist_update:= fetch_unit.io.f3_hist_update
+   bpd_stage.io.bpd_update    := fetch_unit.io.bpd_update
    bpd_stage.io.status_prv    := csr.io.status.prv
    bpd_stage.io.status_debug  := csr.io.status.debug
 
@@ -487,17 +487,6 @@ class BoomCore(implicit p: Parameters, edge: freechips.rocketchip.tilelink.TLEdg
 
    val dec_has_br_or_jalr_in_packet =
       (dec_valids zip dec_uops map {case(v,u) => v && u.is_br_or_jmp && !u.is_jal}).reduce(_|_)
-
-   bpd_stage.io.brob.allocate.valid := dec_will_fire.reduce(_|_) &&
-                                       dec_finished_mask === Bits(0) &&
-                                       dec_has_br_or_jalr_in_packet
-   bpd_stage.io.brob.allocate.bits.ctrl.executed.map{_ := Bool(false)}
-   bpd_stage.io.brob.allocate.bits.ctrl.taken.map{_ := Bool(false)}
-   bpd_stage.io.brob.allocate.bits.ctrl.mispredicted.map{_ := Bool(false)}
-   bpd_stage.io.brob.allocate.bits.ctrl.debug_executed := Bool(false)
-   bpd_stage.io.brob.allocate.bits.ctrl.debug_rob_idx := dec_uops(0).rob_idx
-   bpd_stage.io.brob.allocate.bits.info := dec_fbundle.bpd_resp
-
 
 
    //-------------------------------------------------------------
@@ -1166,7 +1155,7 @@ class BoomCore(implicit p: Parameters, edge: freechips.rocketchip.tilelink.TLEdg
 
       val numFtqWhitespace = if (DEBUG_PRINTF_FTQ) (ftqSz/4)+1 else 0
       val screenheight = 79
-//      val screenheight = 63
+//      val screenheight = 61
 //      val screenheight = 54
        var whitespace = (screenheight - 26 + 3 - NUM_LSU_ENTRIES -
          issueParams.map(_.numEntries).sum - issueParams.length - (NUM_ROB_ENTRIES/COMMIT_WIDTH) - numFtqWhitespace

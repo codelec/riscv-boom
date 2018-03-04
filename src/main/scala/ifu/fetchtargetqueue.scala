@@ -30,7 +30,7 @@ class FTQBundle(implicit p: Parameters) extends BoomBundle()(p)
    val fetch_pc = UInt(width = vaddrBitsExtended.W) // TODO compress out high-order bits
    val history = UInt(width = GLOBAL_HISTORY_LENGTH.W)
    val bim_info = new BimStorage
-//   val bpd_info = new BpdResp?
+   val bpd_info = UInt(width = BPD_INFO_SIZE.W)
 }
 
 // Initially, store a random branch entry for BIM (set cfi_type==branch).
@@ -77,6 +77,9 @@ class FetchTargetQueue(num_entries: Int)(implicit p: Parameters) extends BoomMod
       // Give PC info to BranchUnit.
       val get_ftq_pc = new GetPCFromFtqIO()
 
+      // Restore predictor history on a branch mispredict or pipeline flush.
+      val restore_history = Valid(new RestoreHistory)
+
       // on any sort misprediction or rob flush, reset the enq_ptr, make a PC redirect request.
       val flush = Flipped(Valid(new FlushSignals()))
       // Redirect the frontend as we see fit (due to ROB/flush interactions).
@@ -87,9 +90,10 @@ class FetchTargetQueue(num_entries: Int)(implicit p: Parameters) extends BoomMod
       val com_fetch_pc = Output(UInt(width=vaddrBitsExtended.W))
 
       val bim_update = Valid(new BimUpdate)
+      val bpd_update = Valid(new BpdUpdate)
 
       // BranchResolutionUnit tells us the outcome of branches/jumps.
-      val brinfo = new BrResolutionInfo().asInput
+      val brinfo = Input(new BrResolutionInfo())
 
       val debug_rob_empty = Input(Bool()) // TODO can we build asserts off of this?
    })
@@ -213,11 +217,22 @@ class FetchTargetQueue(num_entries: Int)(implicit p: Parameters) extends BoomMod
       io.bim_update.bits.taken        := miss_data.taken
       io.bim_update.bits.mispredicted := miss_data.mispredicted
 
+
+      io.bpd_update.valid              := true.B
+      io.bpd_update.bits.mispredict    := miss_data.mispredicted
+      io.bpd_update.bits.taken         := miss_data.taken
+      io.bpd_update.bits.miss_cfi_idx  := miss_data.cfi_idx
+      io.bpd_update.bits.fetch_pc      := com_data.fetch_pc
+      io.bpd_update.bits.history       := com_data.history
+      io.bpd_update.bits.info          := com_data.bpd_info
+
+
       if (DEBUG_PRINTF)
       {
-         printf("FTQ: deq[%d]=0x%x bim[%d=%x]:%c %c%c %d-%d %d\n",
+         printf("FTQ: deq[%d]=0x%x hist=0x%x bim[%d=%x]:%c %c%c %d-%d %d\n",
             deq_ptr.value,
             com_data.fetch_pc,
+            com_data.history,
             io.bim_update.bits.entry_idx,
             io.bim_update.bits.entry_idx,
             Mux(io.bim_update.valid, Str("V"), Str(" ")),
@@ -233,6 +248,21 @@ class FetchTargetQueue(num_entries: Int)(implicit p: Parameters) extends BoomMod
    {
       if (DEBUG_PRINTF) printf("FTQ: no dequeue\n")
       io.bim_update.valid := false.B
+      io.bpd_update.valid := false.B
+   }
+
+   //-------------------------------------------------------------
+   // **** Restore Predictor History ****
+   //-------------------------------------------------------------
+
+
+   io.restore_history.valid := (io.brinfo.valid && io.brinfo.mispredict) || io.flush.valid
+   io.restore_history.bits.history := 0.U
+
+   when (io.restore_history.valid)
+   {
+      val ridx = Mux(io.flush.valid, io.com_ftq_idx, io.brinfo.ftq_idx)
+      io.restore_history.bits.history := ram(ridx).history
    }
 
 
@@ -290,7 +320,7 @@ class FetchTargetQueue(num_entries: Int)(implicit p: Parameters) extends BoomMod
          j <- 0 until w
       ){
          val idx = i+j*(num_entries/w)
-         printf(" [%d %c%c%c pc=0x%x ms:%c%c%c%d-%d bim[%d]:0x%x]",
+         printf(" [%d %c%c%c pc=0x%x ms:%c%c%c%d-%d bim[%d]:0x%x hist: 0x%x]",
             idx.asUInt(width=5.W),
             Mux(enq_ptr.value === idx.U, Str("E"), Str(" ")),
             Mux(commit_ptr === idx.U, Str("C"), Str(" ")),
@@ -302,7 +332,8 @@ class FetchTargetQueue(num_entries: Int)(implicit p: Parameters) extends BoomMod
             cfi_info(idx).cfi_type,
             cfi_info(idx).cfi_idx,
             ram(idx).bim_info.entry_idx,
-            ram(idx).bim_info.value
+            ram(idx).bim_info.value,
+            ram(idx).history
          )
          if (j == w-1) printf("\n")
       }
