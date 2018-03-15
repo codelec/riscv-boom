@@ -1,10 +1,9 @@
-package boom.common
+package boom.unittest.exu
 
 import chisel3._
 import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester, TesterOptionsManager, SteppedHWIOTester}
 import org.scalatest.{Matchers, FlatSpec}
 import boom.exu.Imul
-
 
 class IMulUnitTester(c: IMul) extends PeekPokeTester(c) {
 
@@ -27,7 +26,7 @@ class IMulUnitTester(c: IMul) extends PeekPokeTester(c) {
 }
 
 // Invoke test with:
-//    $ sbt 'testOnly boom.IMulSpec'
+//    $ sbt 'testOnly boom.unittest.exu.IMulSpec'
 //
 class IMulSpec extends FlatSpec with Matchers {
    behavior of "IMulSpec"
@@ -74,7 +73,7 @@ class IMulHWIOUnitTester extends SteppedHWIOTester {
 }
 
 // Invoke test with:
-//    $ sbt 'testOnly boom.IMulTester'
+//    $ sbt 'testOnly boom.unittest.exu.IMulTester'
 //
 class IMulTester extends ChiselFlatSpec {
   "IMul" should "compile and run without incident" in {
