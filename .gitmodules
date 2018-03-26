@@ -1,0 +1,12 @@
+[submodule "chisel3"]
+	path = chisel3
+	url = https://github.com/freechipsproject/chisel3
+[submodule "firrtl"]
+	path = firrtl
+	url = https://github.com/freechipsproject/firrtl
+[submodule "firrtl-interpreter"]
+	path = firrtl-interpreter
+	url = https://github.com/freechipsproject/firrtl-interpreter
+[submodule "chisel-testers"]
+	path = chisel-testers
+	url = https://github.com/freechipsproject/chisel-testers
