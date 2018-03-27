@@ -10,3 +10,6 @@
 [submodule "chisel-testers"]
 	path = chisel-testers
 	url = https://github.com/freechipsproject/chisel-testers
+[submodule "treadle"]
+	path = treadle
+	url = https://github.com/ucb-bar/treadle
