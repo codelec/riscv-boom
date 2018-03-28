@@ -1,7 +1,7 @@
 package boom.unittest.common
 
 import chisel3._
-import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester, TesterOptionsManager, SteppedHWIOTester}
+import chisel3.tester._
 import chisel3.internal.sourceinfo._
 import org.scalatest.{Matchers, FlatSpec}
 import boom._

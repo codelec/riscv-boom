@@ -6,26 +6,17 @@ import chisel3._
 import chisel3.tester._
 
 import boom._
+import boom.unittest.common._
 
 import firrtl_interpreter._
 import firrtl.{ExecutionOptionsManager, HasFirrtlOptions}
 
-class IMulUnitTester2 extends FlatSpec with ChiselScalatestTester {
+class IMulUnitTester2 extends FlatSpec with ChiselScalatestTester with UnittestHelperFunc {
   behavior of "Testers2"
 
-  val manager = new ExecutionOptionsManager("vcd") with HasChiselExecutionOptions with HasFirrtlOptions with HasInterpreterSuite {
-    interpreterOptions = interpreterOptions.copy(writeVCD = true)
-  }
-
   it should "test static circuits" in {
-    test(new IMul(imul_stages = 3),manager) { imul =>
-      imul.io.elements.foreach { case (str, dat) => 
-        dat match {
-          case b : Bool => b.poke(false.B) 
-          case a : UInt => a.poke(0.U)  
-          case _ => None
-        }
-      }
+    test(new IMul(imul_stages = 3)) { imul =>
+      initAll(imul.io.elements)
 
       imul.clock.step()
       imul.io.in0.poke(1.U)
