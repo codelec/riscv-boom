@@ -5,6 +5,7 @@ import chisel3.tester._
 import chisel3.internal.sourceinfo._
 import org.scalatest.{Matchers, FlatSpec}
 import boom._
+import boom.system._
 import freechips.rocketchip.config._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.subsystem._
@@ -15,9 +16,10 @@ import freechips.rocketchip.tilelink._
 class TesterConfig extends Config((site, here, up) => {
    case XLen => 64
    case SystemBusKey => SystemBusParams(beatBytes = site(XLen)/8, blockBytes = site(CacheBlockBytes))
-   case TileKey => BoomTileParams(
+   case BoomTilesKey => BoomTileParams(
       core   = BoomCoreParams(
          fpu = Some(freechips.rocketchip.tile.FPUParams(sfmaLatency=4, dfmaLatency=4))))
+   case TileKey => site(BoomTilesKey)
    case SharedMemoryTLEdge => new TLEdgeOut(TLClientPortParameters(clients = Seq(TLClientParameters(name = s"necessaryPain"))),TLManagerPortParameters(
       Seq(TLManagerParameters(
         address         = Seq(AddressSet(0x00dead00, 0x100 - 1)),
