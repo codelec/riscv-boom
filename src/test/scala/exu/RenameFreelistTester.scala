@@ -4,36 +4,25 @@ import org.scalatest._
 
 import chisel3._
 import chisel3.tester._
-import chisel3.internal.sourceinfo._
 
 import boom._
 import boom.system._
 import boom.unittest.common._
 
 import freechips.rocketchip.config._
-import freechips.rocketchip.diplomacy._
-import freechips.rocketchip.subsystem._
-import freechips.rocketchip.tile._
-import freechips.rocketchip.tilelink._
 
 import firrtl_interpreter._
 import firrtl.{ExecutionOptionsManager, HasFirrtlOptions}
 
-import scala.collection.immutable.ListMap
-import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.BitSet
 
 trait RenameHelperFunc {
 
    def checkFree(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.can_allocate(idx).expect(true.B)
    def checkFull(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.can_allocate(idx).expect(false.B) 
-   def exposeI(str: String, ele: Data) = println("" + str + " " + ele.peek().litValue)
-   def exposeB(str: String, ele: Data) = println("" + str + " " + ele.peek().litValue.toString(2)) 
-   def showAllocatedReg(idx: Int)(implicit ren: RenameFreeListHelper) = exposeI("req_pregs("+idx+")",ren.io.req_pregs(idx))
    def allocatedReg(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.req_pregs(idx).peek().litValue.toInt
    def checkAllocatedReg(idx: Int, preg: Int)(implicit ren: RenameFreeListHelper) = ren.io.req_pregs(idx).expect(preg.U)
    def freelist(implicit ren: RenameFreeListHelper) = ren.io.debug.freelist.peek()
-   def showFreeList(implicit ren: RenameFreeListHelper) = exposeB("FreeList",ren.io.debug.freelist)
    def step(implicit ren: RenameFreeListHelper) = ren.clock.step(1) 
    def freeReg(idx: Int, preg: Int)(implicit ren: RenameFreeListHelper) = {   
       ren.io.enq_vals(idx).poke(true.B)
@@ -151,7 +140,6 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
          branchReq(0, 3)
          reqReg(0)
          freeregs -= allocatedReg(0)
-         allocBr(3) += allocatedReg(0)
          step 
          branchReset(0)
          reqReg(0)
@@ -164,7 +152,7 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
          reqReg(0)
          regAllocated = allocatedReg(0)
          freeregs -= regAllocated
-         Seq(3,2).map { i => allocBr(i) += regAllocated }
+         allocBr(3) += allocatedReg(0)
          step 
          branchReset(0)
          reqReg(0)
@@ -178,7 +166,7 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
          reqReg(0)
          regAllocated = allocatedReg(0)
          freeregs -= regAllocated
-         Seq(3,2,1).map { i => allocBr(i) += regAllocated }
+         Seq(3,2).map { i => allocBr(i) += regAllocated }
          step 
          branchReset(0)
          reqReg(0)
@@ -192,7 +180,7 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
          reqReg(0)
          regAllocated = allocatedReg(0)
          freeregs -= regAllocated
-         Seq(3,2,1,0).map { i => allocBr(i) += regAllocated }
+         Seq(3,2,1).map { i => allocBr(i) += regAllocated }
          step 
          branchReset(0)
          reqReg(0)
@@ -219,10 +207,8 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
          step
          branchMispredictReset
          freeregs ++= allocBr(2)
-         println(allocBr(2))
          allocBr(3) --= allocBr(2)
          allocBr(2).clear 
-         println(freeregs)
          if (freeregs.toBitMask(0) != freelist.litValue) testerFail("freelist and freeregs differ")
       }
    }
