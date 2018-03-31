@@ -21,25 +21,20 @@ import firrtl.{ExecutionOptionsManager, HasFirrtlOptions}
 
 import scala.collection.immutable.ListMap
 import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.BitSet
 
 trait RenameHelperFunc {
 
    def checkFree(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.can_allocate(idx).expect(true.B)
    def checkFull(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.can_allocate(idx).expect(false.B) 
-   def uopGen(idx: Int, stale_pdst: Int, ldst_val: Int, pdst: Int)(implicit ren: RenameFreeListHelper) = { 
-      ren.io.com_uops(idx).dst_rtype.poke(RT_FIX)
-      ren.io.com_uops(idx).valid.poke(true.B)
-   }
    def exposeI(str: String, ele: Data) = println("" + str + " " + ele.peek().litValue)
    def exposeB(str: String, ele: Data) = println("" + str + " " + ele.peek().litValue.toString(2)) 
    def showAllocatedReg(idx: Int)(implicit ren: RenameFreeListHelper) = exposeI("req_pregs("+idx+")",ren.io.req_pregs(idx))
    def allocatedReg(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.req_pregs(idx).peek().litValue.toInt
    def checkAllocatedReg(idx: Int, preg: Int)(implicit ren: RenameFreeListHelper) = ren.io.req_pregs(idx).expect(preg.U)
+   def freelist(implicit ren: RenameFreeListHelper) = ren.io.debug.freelist.peek()
    def showFreeList(implicit ren: RenameFreeListHelper) = exposeB("FreeList",ren.io.debug.freelist)
-   def step(implicit ren: RenameFreeListHelper) = {   
-      ren.clock.step(1) 
-      println("step")
-   }
+   def step(implicit ren: RenameFreeListHelper) = ren.clock.step(1) 
    def freeReg(idx: Int, preg: Int)(implicit ren: RenameFreeListHelper) = {   
       ren.io.enq_vals(idx).poke(true.B)
       ren.io.enq_pregs(idx).poke(preg.U)
@@ -86,23 +81,54 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
    with RenameHelperFunc with UnittestHelperFunc {
    behavior of "Testers2"
 
-   var p = new TesterConfig ++ new withMaxBrCount(4)
+   val freeregs = BitSet()
+   // allocations after a branch is detected
+   val allocBr = Seq.fill(4)(BitSet())
+   var regAllocated : Int = 0 
 
-   it should "test rename circuits" in {
-      test(new RenameFreeListHelper(32,1)(p)) { ren =>
+   val optionsManager = new ExecutionOptionsManager("chisel3") with HasChiselExecutionOptions with HasFirrtlOptions with HasInterpreterSuite {
+      chiselOptions = chiselOptions.copy(scalaSimulator = TreadleSimulator)
+   }
+
+   var p = new TesterConfig ++ new withMaxBrCount(4)
+   it should "test renamefreelisthelper module handling single decode" in {
+      test(new RenameFreeListHelper(32,1)(p),optionsManager) { ren =>
          implicit val d = ren
-         val freeregs = ListBuffer[Int]()
          for (i <- 1 until 32) freeregs += i
          initAll(ren.io.elements)
-         for (i <- 0 until 18) {
+
+
+         /// EMPTY & REFILL
+         for (i <- 1 until 32) {
             step
             reqReg(0)
             checkFree(0)
             freeregs -= allocatedReg(0)
-            showAllocatedReg(0)
-            showFreeList
          }
+         step 
+         reqRegReset(0)
+         checkFull(0)
+         for (i <- 1 until 32) {
+            step
+            freeReg(0, i)
+            freeregs += i
+         }
+         step
+         freeReqReset(0)
+         checkFree(0)
+
+
+         for (i <- 1 until 18) {
+            step
+            reqReg(0)
+            checkFree(0)
+            freeregs -= allocatedReg(0)
+         }
+         step
+         reqRegReset(0)
+         step
          
+         // free and reallocate under a branch misprediction
          branchReq(0, 3)
          step
          branchReset(0)
@@ -110,19 +136,102 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
          freeregs += 4
          step
          freeReqReset(0)
-         showFreeList
-         showAllocatedReg(0)
          reqReg(0)
          freeregs -= allocatedReg(0)
+         allocBr(3) += allocatedReg(0)
          step
          reqRegReset(0)
-         showFreeList
-         step
          branchMispredict(3)
+         freeregs ++= allocBr(3)
+         allocBr(3).clear
          step
          branchMispredictReset
-         showFreeList
 
+         step
+         branchReq(0, 3)
+         reqReg(0)
+         freeregs -= allocatedReg(0)
+         allocBr(3) += allocatedReg(0)
+         step 
+         branchReset(0)
+         reqReg(0)
+         freeregs -= allocatedReg(0)
+         allocBr(3) += allocatedReg(0)
+         step
+         reqRegReset(0)
+         step
+         branchReq(0, 2)
+         reqReg(0)
+         regAllocated = allocatedReg(0)
+         freeregs -= regAllocated
+         Seq(3,2).map { i => allocBr(i) += regAllocated }
+         step 
+         branchReset(0)
+         reqReg(0)
+         regAllocated = allocatedReg(0)
+         freeregs -= regAllocated
+         Seq(3,2).map { i => allocBr(i) += regAllocated }
+         step
+         reqRegReset(0)
+         step
+         branchReq(0, 1)
+         reqReg(0)
+         regAllocated = allocatedReg(0)
+         freeregs -= regAllocated
+         Seq(3,2,1).map { i => allocBr(i) += regAllocated }
+         step 
+         branchReset(0)
+         reqReg(0)
+         regAllocated = allocatedReg(0)
+         freeregs -= regAllocated
+         Seq(3,2,1).map { i => allocBr(i) += regAllocated }
+         step
+         reqRegReset(0)
+         step
+         branchReq(0, 0)
+         reqReg(0)
+         regAllocated = allocatedReg(0)
+         freeregs -= regAllocated
+         Seq(3,2,1,0).map { i => allocBr(i) += regAllocated }
+         step 
+         branchReset(0)
+         reqReg(0)
+         regAllocated = allocatedReg(0)
+         freeregs -= regAllocated
+         Seq(3,2,1,0).map { i => allocBr(i) += regAllocated }
+         step
+         branchMispredictReset
+         reqRegReset(0)
+         branchReset(0)
+         step 
+
+         branchMispredict(1)
+         freeReg(0, 2)
+         freeregs += 2
+         step
+         freeReqReset(0)
+         branchMispredictReset
+         freeregs ++= allocBr(1)
+         Seq(3,2).map { i => allocBr(i) --= allocBr(1) }
+         Seq(1,0).map { i => allocBr(i).clear }
+         step
+         branchMispredict(2)
+         step
+         branchMispredictReset
+         freeregs ++= allocBr(2)
+         println(allocBr(2))
+         allocBr(3) --= allocBr(2)
+         allocBr(2).clear 
+         println(freeregs)
+         if (freeregs.toBitMask(0) != freelist.litValue) testerFail("freelist and freeregs differ")
       }
    }
+   freeregs.clear
+   allocBr.map { x => x.clear }
+
+   it should "test rename circuits" in {
+   test(new RenameFreeListHelper(48,2)(p)) { ren =>
+   implicit val d = ren
+   for (i <- 1 until 48) freeregs += i
+   }}
 }
