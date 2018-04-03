@@ -69,8 +69,8 @@ class withEnableCommitTable extends Config((site, here, up) => {
 class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester 
    with RenameHelperFunc with UnittestHelperFunc {
    behavior of "Testers2"
-
    val freeregs = BitSet()
+   val rand = new scala.util.Random
    // allocations after a branch is detected
    val allocBr = Seq.fill(4)(BitSet())
    var regAllocated : Int = 0 
@@ -82,6 +82,7 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
    var p = new TesterConfig ++ new withMaxBrCount(4)
    it should "test renamefreelisthelper module handling single decode" in {
       test(new RenameFreeListHelper(32,1)(p),optionsManager) { ren =>
+   println(ren.io.rollback_pdsts(0))
          implicit val d = ren
          for (i <- 1 until 32) freeregs += i
          initAll(ren.io.elements)
@@ -215,9 +216,95 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
    freeregs.clear
    allocBr.map { x => x.clear }
 
-   it should "test rename circuits" in {
+   it should "test basic functionality in dual decode " in {
    test(new RenameFreeListHelper(48,2)(p)) { ren =>
    implicit val d = ren
    for (i <- 1 until 48) freeregs += i
+   // EMPTY & REFILL 
+   /* Get to a state where one of the decode pipelines 
+   * can be satisfied with a register request and the other can't
+   */
+   step 
+   reqReg(0)
+   reqReg(1)
+   for (i <- 0 until 22) {
+      freeregs -= (allocatedReg(0), allocatedReg(1))
+      checkFree(0)
+      checkFree(1)
+      step
+   }
+   reqRegReset(1)
+   checkFree(0)
+   freeregs -= allocatedReg(0)
+   step
+   checkFree(0)
+   freeregs -= allocatedReg(0)
+   step
+   checkFree(0)
+   checkFull(1)
+   freeregs -= allocatedReg(0)
+   step 
+   reqRegReset(0)
+
+
+   for (i <- 0 until 16) {
+      val a = rand.nextInt(47) + 1
+      if (!freeregs(a)) {
+      freeReg(0, a)
+      freeregs += a
+      step }
+   }
+   freeReqReset(0)
+   if (freeregs.toBitMask(0) != freelist.litValue) testerFail("freelist and freeregs differ")
+   step
+
+   }}
+   freeregs.clear
+   allocBr.map { x => x.clear }
+
+
+   it should "test dual decode with random allocations/deallocations done in parallel in separate threads" in {
+   test(new RenameFreeListHelper(48,2)(p)) { ren =>
+   implicit val d = ren
+   for (i <- 1 until 48) freeregs += i
+   fork {
+      ren.io.req_preg_vals(0).weakPoke(true.B)
+      ren.io.req_preg_vals(1).weakPoke(true.B)
+      for (i <- 0 until 10) {
+      freeregs -= (allocatedReg(0), allocatedReg(1))
+      step
+      }
+      ren.io.req_preg_vals(0).weakPoke(false.B)
+      ren.io.req_preg_vals(1).weakPoke(false.B)
+      step
+   } .fork {
+      ren.clock.step(14)
+      var a : Int = 0
+      var b : Int = 0
+      for (i <- 0 until 16) {
+         a = rand.nextInt(47) + 1
+         if (!freeregs(a)) {
+            freeReg(0, a)
+            freeregs += a } else freeReqReset(0)
+         b = rand.nextInt(47) + 1
+         if (!freeregs(b)) {
+            freeReg(1, b)
+            freeregs += b } else freeReqReset(1)
+         step
+      }
+      freeReqReset(0)
+      freeReqReset(1)
+   } .fork {
+      ren.clock.step(14)
+      reqReg(0)
+      for (i <- 0 until 16) {
+         freeregs -= allocatedReg(0)
+         step
+      }
+      reqRegReset(0)
+   } .join
+   step
+   if (freeregs.toBitMask(0) != freelist.litValue) testerFail("freelist and freeregs differ")
+
    }}
 }
