@@ -16,7 +16,7 @@ import firrtl.{ExecutionOptionsManager, HasFirrtlOptions}
 
 import scala.collection.mutable.BitSet
 
-trait RenameHelperFunc {
+trait RenameFreeListHelperFunc {
 
    def checkFree(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.can_allocate(idx).expect(true.B)
    def checkFull(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.can_allocate(idx).expect(false.B) 
@@ -66,9 +66,9 @@ class withEnableCommitTable extends Config((site, here, up) => {
 
 // Invoke test with:
 //    $ sbt 'testOnly boom.unittest.exu.RenameFreeListTester2'
-class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester 
-   with RenameHelperFunc with UnittestHelperFunc {
-   behavior of "Testers2"
+class RenameFreeListTester extends FlatSpec with ChiselScalatestTester 
+   with RenameFreeListHelperFunc with UnittestHelperFunc {
+   behavior of "exu/rename-freelist"
    val freeregs = BitSet()
    val rand = new scala.util.Random
    // allocations after a branch is detected
@@ -297,11 +297,13 @@ class RenameFreeListTester2 extends FlatSpec with ChiselScalatestTester
    } .fork {
       ren.clock.step(14)
       reqReg(0)
+      reqReg(1)
       for (i <- 0 until 16) {
-         freeregs -= allocatedReg(0)
+         freeregs -= (allocatedReg(0),allocatedReg(1))
          step
       }
       reqRegReset(0)
+      reqRegReset(1)
    } .join
    step
    if (freeregs.toBitMask(0) != freelist.litValue) testerFail("freelist and freeregs differ")
