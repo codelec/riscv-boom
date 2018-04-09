@@ -20,4 +20,5 @@ trait UnittestHelperFunc extends FlatSpec {
 		   }
 		}
    }
+   def step(implicit mod: Module) = mod.clock.step(1)
 }

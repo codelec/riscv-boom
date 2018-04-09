@@ -23,7 +23,6 @@ trait RenameFreeListHelperFunc {
    def allocatedReg(idx: Int)(implicit ren: RenameFreeListHelper) = ren.io.req_pregs(idx).peek().litValue.toInt
    def checkAllocatedReg(idx: Int, preg: Int)(implicit ren: RenameFreeListHelper) = ren.io.req_pregs(idx).expect(preg.U)
    def freelist(implicit ren: RenameFreeListHelper) = ren.io.debug.freelist.peek()
-   def step(implicit ren: RenameFreeListHelper) = ren.clock.step(1) 
    def freeReg(idx: Int, preg: Int)(implicit ren: RenameFreeListHelper) = {   
       ren.io.enq_vals(idx).poke(true.B)
       ren.io.enq_pregs(idx).poke(preg.U)
