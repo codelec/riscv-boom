@@ -61,12 +61,18 @@ trait RenameMapTableHelper {
    } 
    def renUOPRs3Reset(idx: Int)(implicit ren: RenameMapTable) = ren.io.ren_uops(idx).frs3_en.poke(false.B)
 
-   def comRbk(idx: Int, stale_pdst: Int)(implicit ren: RenameMapTable) = {
+   def comRbk(idx: Int, ldst: Int, stale_pdst: Int)(implicit ren: RenameMapTable) = {
+      ren.io.com_uops(idx).ldst.poke(ldst.U)
       ren.io.com_uops(idx).stale_pdst.poke(stale_pdst.U)
       ren.io.com_rbk_valids(idx).poke(true.B)  
    } 
    def comRbkReset(idx: Int)(implicit ren: RenameMapTable) = ren.io.com_rbk_valids(idx).poke(false.B)   
 
+   def renBrMispredict(tag: Int)(implicit ren: RenameMapTable) = {
+      ren.io.brinfo.mispredict.poke(true.B)
+      ren.io.brinfo.tag.poke(tag.U)
+   }
+   def renBrMispredictReset(implicit ren: RenameMapTable) = ren.io.brinfo.mispredict.poke(false.B)
 }
 
 //    $ sbt 'testOnly boom.unittest.exu.RenameMapTableTester'
@@ -81,9 +87,11 @@ class RenameMapTableTester extends FlatSpec with ChiselScalatestTester
    def rand32 = {lr1 = rand.nextInt(31) + 1 ; lr1}
    def rand48 = {pr1 = rand.nextInt(47) + 1 ; pr1}
    val pregs = BitSet()
-   val maps = ListMap[Int, ArrayBuffer[Int]]()
+   val brmaps = ListMap[Int, ArrayBuffer[Int]]()
+   val maps = ListMap[Int, Int]()
    for (i <- 1 until 48) pregs += i
-   for (i <- 1 until 32) maps += i -> ArrayBuffer.fill(4)(-1)
+   for (i <- 1 until 32) maps += i -> -1
+   for (i <- 1 until 32) brmaps += i -> ArrayBuffer.fill(4)(-1)
 
    val optionsManager = new ExecutionOptionsManager("chisel3") with HasChiselExecutionOptions with HasFirrtlOptions with HasInterpreterSuite {
       chiselOptions = chiselOptions.copy(scalaSimulator = TreadleSimulator)
@@ -95,53 +103,229 @@ class RenameMapTableTester extends FlatSpec with ChiselScalatestTester
       implicit val d = ren
       initAll(ren.io.elements)
       initRtype(RT_FIX)
-
-      renUOPValid(0)
-      renUOPValid(1)
       ren.io.debug_inst_can_proceed.map { x => x.poke(true.B) }
       ren.io.debug_freelist_can_allocate.map { x => x.poke(true.B) }
+
+      // consume few pregs 
+      // therefore create few mappings
+      renUOPValid(0)
+      renUOPValid(1)
       for (i <- 1 until 21 by 2) {
          renUOPLdst(0, rand32, i)
          pregs.remove(i)
-         maps(lr1)(0) = i
+         maps(lr1) = i
          renUOPLdst(1, rand32, i + 1)
          pregs.remove(i + 1)
-         maps(lr1)(0) = i + 1
+         maps(lr1) = i + 1
          step
       }
-      renUOPLdst(0, rand32, i)
-      //pregs.remove(i) 
-      // such pregs should be freed at commit time
-      maps(lr1)(0) = i
-      renUOPLdst(1, lr1, i + 1)
-      pregs.remove(i + 1)
-      maps(lr1)(0) = i + 1
+      // both pipes trying to map 
+      // to same lreg
+      renUOPLdst(0, rand32, 21)
+      pregs.remove(22) 
+      maps(lr1) = 21
+      renUOPLdst(1, lr1, 22)
+      pregs.remove(22)
+      maps(lr1) = 22
       step
       renUOPReset(0)
       renUOPReset(1)
+      renUOPLdstReset(0)
+      renUOPLdstReset(1)
 
+      // only check mappings
       step 
       renUOPValid(0)
       renUOPValid(1)
       for (i <- 0 until 8) {
-         while(maps(rand32)(0) == -1) {}
+         while(maps(rand32) == -1) {}
          lr2 = lr1
-         while(maps(rand32)(0) == -1) {}
+         while(maps(rand32) == -1) {}
          renUOPLrs(0, lr2, lr1)
-         checkValues1(0, maps(lr2)(0))
-         checkValues2(0, maps(lr1)(0))
-         while(maps(rand32)(0) == -1) {}
+         checkValues1(0, maps(lr2))
+         checkValues2(0, maps(lr1))
+         while(maps(rand32) == -1) {}
          lr2 = lr1
-         while(maps(rand32)(0) == -1) {}
+         while(maps(rand32) == -1) {}
          renUOPLrs(1, lr2, lr1)
-         checkValues1(1, maps(lr2)(0))
-         checkValues2(1, maps(lr1)(0))
+         checkValues1(1, maps(lr2))
+         checkValues2(1, maps(lr1))
          step 
       }
       renUOPReset(0)
       renUOPReset(1)
 
+      // both pipes create and check 
+      // for existing mappings
+      step 
+      renUOPValid(0)
+      renUOPValid(1)
+      for (i <- 0 until 8) {
+         while(maps(rand32) == -1) {}
+         lr2 = lr1
+         while(maps(rand32) == -1) {}
+         renUOPLrs(0, lr2, lr1)
+         checkValues1(0, maps(lr2))
+         checkValues2(0, maps(lr1))
+         pr1 = pregs.head
+         renUOPLdst(0, rand32, pr1)
+         pregs.remove(pr1)
+         maps(lr1) = pr1
 
+         while(maps(rand32) == -1) {}
+         lr2 = lr1
+         while(maps(rand32) == -1) {}
+         renUOPLrs(1, lr2, lr1)
+         checkValues1(1, maps(lr2))
+         checkValues2(1, maps(lr1))
+         pr1 = pregs.head
+         renUOPLdst(1, rand32, pr1)
+         pregs.remove(pr1)
+         maps(lr1) = pr1
+         step 
+      }
+      renUOPLdstReset(0)
+      renUOPLdstReset(1)
+      renUOPReset(0)
+      renUOPReset(1)
+
+      // release few pregs
+      step
+      for (i <- 0 until 10) {
+         while(pregs(rand48)) {}
+         pregs += pr1
+         while(pregs(rand48)) {}
+         pregs += pr1
+         step
+      }
+      comRbkReset(0)
+      comRbkReset(1)
+      
+      // check forwarding
+      // by allocating in one pipe
+      // checking both the commbinations of reg
+      // in the other one
+      step 
+      renUOPValid(0)
+      renUOPValid(1)
+      for (i <- 0 until 8) {
+         while(maps(rand32) == -1) {}
+         pr1 = pregs.head
+         pregs.remove(pr1)
+         renUOPLdst(0, lr1, pr1)
+         maps(lr1) = pr1
+
+         lr2 = lr1
+         while(maps(rand32) == -1) {}
+         if (i % 2 == 0) {  
+            renUOPLrs(1, lr2, lr1) 
+            checkValues1(1, maps(lr2))
+            checkValues2(1, maps(lr1))
+         } else {
+            renUOPLrs(1, lr1, lr2)
+            checkValues1(1, maps(lr1))
+            checkValues2(1, maps(lr2))
+         }
+         step          
+      }
+      renUOPLdstReset(0)
+      renUOPReset(0)
+      renUOPReset(1)
+
+      // normal op in first pipe
+      // branch valid in the second one
+      step
+      renUOPValid(0)
+      renUOPValid(1)
+      while(maps(rand32) == -1) {}
+      lr2 = lr1
+      while(maps(rand32) == -1) {}
+      renUOPLrs(0, lr2, lr1)
+      checkValues1(0, maps(lr2))
+      checkValues2(0, maps(lr1))
+      pr1 = pregs.head
+      renUOPLdst(0, rand32, pr1)
+      pregs.remove(pr1)
+      maps(lr1) = pr1
+
+      renUOPBr(1, 3)
+      pr1 = pregs.head
+      renUOPLdst(1, rand32, pr1)
+      pregs.remove(pr1)
+      maps(lr1) = pr1
+      maps.map { case (i, valu) => brmaps(i)(3) = valu }
+
+      // branch valid in the first one
+      // normal op in second pipe
+      step
+      renUOPBrReset(1)
+      pr1 = pregs.head
+      renUOPLdst(0, rand32, pr1)
+      pregs.remove(pr1)
+      maps(lr1) = pr1
+      maps.map { case (i, valu) => brmaps(i)(2) = valu }
+      renUOPBr(0, 2)
+
+      while(maps(rand32) == -1) {}
+      lr2 = lr1
+      while(maps(rand32) == -1) {}
+      renUOPLrs(1, lr2, lr1)
+      checkValues1(1, maps(lr2))
+      checkValues2(1, maps(lr1))
+      pr1 = pregs.head
+      renUOPLdst(1, rand32, pr1)
+      pregs.remove(pr1)
+      maps(lr1) = pr1
+
+      step
+      renUOPBrReset(0)
+      for (i <- 0 until 5) {
+         while(maps(rand32) == -1) {}
+         lr2 = lr1
+         while(maps(rand32) == -1) {}
+         renUOPLrs(0, lr2, lr1)
+         checkValues1(0, maps(lr2))
+         checkValues2(0, maps(lr1))
+         pr1 = pregs.head
+         renUOPLdst(0, rand32, pr1)
+         pregs.remove(pr1)
+         maps(lr1) = pr1
+
+         while(maps(rand32) == -1) {}
+         lr2 = lr1
+         while(maps(rand32) == -1) {}
+         renUOPLrs(1, lr2, lr1)
+         checkValues1(1, maps(lr2))
+         checkValues2(1, maps(lr1))
+         pr1 = pregs.head
+         renUOPLdst(1, rand32, pr1)
+         pregs.remove(pr1)
+         maps(lr1) = pr1
+         step 
+      }
+      renBrMispredict(2)
+      renUOPLdstReset(0)
+      renUOPLdstReset(1)
+      step 
+      renBrMispredictReset
+      brmaps.map { case (i, arry) => maps(i) = arry(2) }
+      for (i <- 0 until 45) {
+         while(maps(rand32) == -1) {}
+         lr2 = lr1
+         while(maps(rand32) == -1) {}
+         renUOPLrs(0, lr2, lr1)
+         checkValues1(0, maps(lr2))
+         checkValues2(0, maps(lr1))
+         while(maps(rand32) == -1) {}
+         lr2 = lr1
+         while(maps(rand32) == -1) {}
+         renUOPLrs(1, lr2, lr1)
+         checkValues1(1, maps(lr2))
+         checkValues2(1, maps(lr1))
+         step 
+      }
+      renUOPReset(0)
+      renUOPReset(1)
       }
    }
 
