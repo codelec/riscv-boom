@@ -27,7 +27,7 @@ import freechips.rocketchip.config.Parameters
 import boom.bpu._
 import boom.common._
 import boom.exu._
-import boom.util.{AgePriorityEncoder, ElasticReg}
+import boom.util.{AgePriorityEncoder, ElasticReg2}
 
 import freechips.rocketchip.util.Str
 import freechips.rocketchip.util.UIntToAugmentedUInt
@@ -113,8 +113,8 @@ class FetchControlUnit(fetch_width: Int)(implicit p: Parameters) extends BoomMod
 
 
    val clear_f3         = Wire(init=false.B)
-   val q_f3_imemresp    = withReset(reset || clear_f3) { Module(new ElasticReg(gen = io.imem_resp.bits)) }
-   val q_f3_btb_resp    = withReset(reset || clear_f3) { Module(new ElasticReg(gen = io.f2_btb_resp)) }
+   val q_f3_imemresp    = withReset(reset || clear_f3) { Module(new ElasticReg2(gen = io.imem_resp.bits)) }
+   val q_f3_btb_resp    = withReset(reset || clear_f3) { Module(new ElasticReg2(gen = io.f2_btb_resp)) }
 
    val f3_req           = Wire(Valid(new PCReq()))
    val f3_fetch_bundle  = Wire(new FetchBundle)

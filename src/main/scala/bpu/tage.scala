@@ -30,7 +30,7 @@ import Chisel._
 import chisel3.core.withReset
 import freechips.rocketchip.config.{Parameters, Field}
 import boom.common._
-import boom.util.{ElasticReg, Fold}
+import boom.util.{ElasticReg2, Fold}
 
 import freechips.rocketchip.util.Str
 
@@ -251,7 +251,7 @@ class TageBrPredictor(
    val q_f3_resps = for (i <- 0 until num_tables) yield
    {
       val q_resp = withReset(reset || io.fe_clear || io.f4_redirect)
-       {Module(new ElasticReg(Valid(new TageTableResp(fetch_width, tag_sizes.max, cntr_sz, ubit_sz))))}
+       {Module(new ElasticReg2(Valid(new TageTableResp(fetch_width, tag_sizes.max, cntr_sz, ubit_sz))))}
 
       q_resp.io.enq.valid := io.f2_valid
       q_resp.io.enq.bits := tables_io(i).bp2_resp

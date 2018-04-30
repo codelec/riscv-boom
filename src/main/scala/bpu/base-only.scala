@@ -20,7 +20,7 @@ package boom.bpu
 import Chisel._
 import chisel3.core.withReset
 import freechips.rocketchip.config.{Parameters, Field}
-import boom.util.ElasticReg
+import boom.util.ElasticReg2
 
 
 case class BaseOnlyParameters(
@@ -53,7 +53,7 @@ class BaseOnlyBrPredictor(
    // Get prediction in F2, buffer, and provide prediction in F3.
 
    val q_s3_resp = withReset(reset || io.fe_clear || io.f4_redirect)
-      {Module(new ElasticReg(Valid(new BimResp)))}
+      {Module(new ElasticReg2(Valid(new BimResp)))}
 
    q_s3_resp.io.enq.valid := io.f2_valid
    q_s3_resp.io.enq.bits := io.f2_bim_resp

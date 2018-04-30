@@ -29,7 +29,7 @@ import freechips.rocketchip.rocket.RocketCoreParams
 import boom.common._
 import boom.exu._
 import boom.exu.BranchUnitResp
-import boom.util.ElasticReg
+import boom.util.ElasticReg2
 
 
 // This is the response packet from the branch predictor. The predictor is
@@ -157,7 +157,7 @@ abstract class BrPredictor(
 
    // match the other ERegs in the FrontEnd.
    val q_f3_history = withReset(reset || io.fe_clear || io.f4_redirect)
-      { Module(new ElasticReg(UInt(width=history_length.W))) }
+      { Module(new ElasticReg2(UInt(width=history_length.W))) }
 
    require (history_length == GLOBAL_HISTORY_LENGTH)
 

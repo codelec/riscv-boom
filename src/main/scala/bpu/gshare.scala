@@ -22,7 +22,7 @@ import Chisel._
 import chisel3.core.withReset
 import freechips.rocketchip.config.{Parameters, Field}
 import boom.common._
-import boom.util.{ElasticReg, Fold}
+import boom.util.{ElasticReg2, Fold}
 
 
 case class GShareParameters(
@@ -196,7 +196,7 @@ class GShareBrPredictor(
    val s2_out = counter_table.read(s1_ridx, this.f1_valid)
 
    val q_s3_resp = withReset(reset || io.fe_clear || io.f4_redirect)
-      {Module(new ElasticReg(new GShareResp(fetch_width, idx_sz)))}
+      {Module(new ElasticReg2(new GShareResp(fetch_width, idx_sz)))}
 //      {Module(new ElasticReg(UInt(width=row_sz)))}
 
    q_s3_resp.io.enq.valid := io.f2_valid
