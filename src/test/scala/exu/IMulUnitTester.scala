@@ -5,7 +5,7 @@ import org.scalatest._
 import chisel3._
 import chisel3.tester._
 
-import boom._
+import boom.exu._
 import boom.unittest.common._
 
 import firrtl_interpreter._

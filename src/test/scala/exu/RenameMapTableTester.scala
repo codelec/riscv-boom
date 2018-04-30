@@ -5,8 +5,9 @@ import org.scalatest._
 import chisel3._
 import chisel3.tester._
 
-import boom._
+import boom.exu._
 import boom.system._
+import boom.common._
 import boom.unittest.common._
 
 import freechips.rocketchip.config._

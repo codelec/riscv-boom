@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.tester._
 import chisel3.internal.sourceinfo._
 import org.scalatest.{Matchers, FlatSpec}
-import boom._
+import boom.common._
 import boom.system._
 import freechips.rocketchip.config._
 import freechips.rocketchip.diplomacy._
