@@ -15,7 +15,8 @@ class ElasticReg2[T <: Data](gen: T) extends Module {
    private val shadow = Reg(gen)
    private val output = Reg(gen)
 
-   // React only if enqueue or dequeue
+   // React only if enqueue "or" dequeue
+   // enqueue, dequeue need not occur in the same cycle
 
    when (io.enq.fire() && outValid) {
       shadow := io.enq.bits
@@ -24,13 +25,18 @@ class ElasticReg2[T <: Data](gen: T) extends Module {
       shaValid := !io.deq.ready 
    }
 
-   when (io.enq.fire() && (!outValid || io.deq.ready)) {
+   // enq occurs, deq may occur in same cycle
+   when (io.enq.fire() && (!outValid || io.deq.ready)) { 
       output := io.enq.bits
-      outValid := true.B
+      // for the element entering this elastic-reg 
+      // when both shadow and output are empty
+      outValid := true.B 
    }
 
    when (io.deq.fire()) {
-      outValid := io.enq.valid || shaValid // nothing incoming and shadow empty
+      // deq occurs, enq may happen in same cycle
+      // incoming or shadow occupied
+      outValid := io.enq.valid || shaValid 
       when (shaValid) {
          output := shadow
          shaValid := false.B
