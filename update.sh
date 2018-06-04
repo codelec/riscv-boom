@@ -11,13 +11,13 @@ cp utils/bin/firrtl.jar ../treadle/lib
 cd ../firrtl-interpreter
 git pull
 sbt package
-cp target/scala-2.11/firrtl-interpreter_2.11-1.2-SNAPSHOT.jar ../lib
-cp target/scala-2.11/firrtl-interpreter_2.11-1.2-SNAPSHOT.jar ../chisel3/lib
+cp target/scala-2.11/firrtl-interpreter_2.11-1.2-SNAPSHOT.jar ../lib/firrtl-interpreter.jar
+cp target/scala-2.11/firrtl-interpreter_2.11-1.2-SNAPSHOT.jar ../chisel3/lib/firrtl-interpreter.jar
 cd ../treadle
 git pull
 sbt package
-cp target/scala-2.11/treadle_2.11-1.1-SNAPSHOT.jar ../lib
-cp target/scala-2.11/treadle_2.11-1.1-SNAPSHOT.jar ../chisel3/lib
+cp target/scala-2.11/treadle_2.11-1.1-SNAPSHOT.jar ../lib/treadle.jar
+cp target/scala-2.11/treadle_2.11-1.1-SNAPSHOT.jar ../chisel3/lib/treadle.jar
 cd ../chisel3
 git pull
 sbt package
